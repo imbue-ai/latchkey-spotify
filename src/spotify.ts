@@ -347,13 +347,7 @@ export function createSpotify(sdk: LatchkeySdk) {
     readonly baseApiUrls = [WEB_PLAYER_API_BASE_URL] as const;
     readonly loginUrl = LOGIN_URL;
     readonly info = [
-      `Spotify, through the web player's own API at ${WEB_PLAYER_API_BASE_URL} (undocumented; ` +
-        'the public api.spotify.com rate-limits web-player tokens).',
-      '',
-      `Credentials are the ${SESSION_COOKIE_NAME} cookie of a signed-in web player session, ` +
-        'captured by `latchkey auth browser spotify` or pasted via `latchkey auth set-nocurl`. ' +
-        'The short-lived access token that is actually sent is minted from the cookie in a ' +
-        'headless browser whenever a request finds it expired, which takes a few seconds.',
+      `Spotify, through the web player's own API at ${WEB_PLAYER_API_BASE_URL} (undocumented).`,
       '',
       `Known endpoint: GET ${PROFILE_URL} returns the signed-in user's profile.`,
       '',
