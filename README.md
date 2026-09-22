@@ -52,7 +52,3 @@ To try a checkout without cloning it into place, symlink it:
 ```bash
 ln -s "$(pwd)" ~/.latchkey/plugins/spotify
 ```
-
-## License
-
-MIT
