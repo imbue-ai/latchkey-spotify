@@ -348,11 +348,9 @@ export function createSpotify(sdk: LatchkeySdk) {
     readonly loginUrl = LOGIN_URL;
     readonly info = [
       `Spotify, through the web player's own API at ${WEB_PLAYER_API_BASE_URL} (undocumented).`,
-      '',
       `Known endpoint: GET ${PROFILE_URL} returns the signed-in user's profile.`,
-      '',
       "This relies on Spotify's first-party web client and may break when Spotify changes it.",
-    ].join('\n');
+    ].join(' ');
 
     // A cheap read that only a valid token gets a 200 for.
     readonly credentialCheckCurlArguments = [PROFILE_URL] as const;
