@@ -3,7 +3,9 @@
 A [Latchkey](https://github.com/imbue-ai/latchkey) plugin that
 adds Spotify as a service using its private API. The primary
 purpose of this repository is to serve as an example of what
-a Latchkey plugin looks like.  Use at your own risk.
+a Latchkey plugin looks like. Use at your own risk.
+
+(Originally contributed [here](https://github.com/imbue-ai/latchkey/pull/125).)
 
 ## Installation
 
