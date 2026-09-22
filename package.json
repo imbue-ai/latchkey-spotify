@@ -1,0 +1,32 @@
+{
+  "name": "latchkey-spotify",
+  "version": "0.1.0",
+  "description": "Latchkey plugin adding Spotify, through the web player's own session.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imbue-ai/latchkey-spotify.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.0.0",
+    "eslint": "^10.8.0",
+    "latchkey": "^3.15.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.0.18"
+  }
+}

@@ -1,0 +1,4 @@
+node_modules/
+
+# dist/ is deliberately committed: a bare `git clone` into ~/.latchkey/plugins
+# must be a complete installation, and Latchkey loads the built JavaScript.
