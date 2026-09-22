@@ -8,16 +8,14 @@
  * services store.
  */
 
-import type { LatchkeyPluginFactory } from 'latchkey/plugin';
+import type { LatchkeyPlugin, LatchkeySdk } from 'latchkey/plugin';
 import { createSpotify } from './spotify.js';
 
-const plugin: LatchkeyPluginFactory = (sdk) => {
+export default function plugin(sdk: LatchkeySdk): LatchkeyPlugin {
   const { Spotify, SpotifySessionCredentials } = createSpotify(sdk);
   return {
     latchkeyVersion: '^3.15.0',
     services: [new Spotify()],
     apiCredentialsTypes: [SpotifySessionCredentials],
   };
-};
-
-export default plugin;
+}

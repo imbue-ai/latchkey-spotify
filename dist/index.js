@@ -8,12 +8,11 @@
  * services store.
  */
 import { createSpotify } from './spotify.js';
-const plugin = (sdk) => {
+export default function plugin(sdk) {
     const { Spotify, SpotifySessionCredentials } = createSpotify(sdk);
     return {
         latchkeyVersion: '^3.15.0',
         services: [new Spotify()],
         apiCredentialsTypes: [SpotifySessionCredentials],
     };
-};
-export default plugin;
+}
