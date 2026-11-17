@@ -44,6 +44,10 @@ const WEB_PLAYER_API_BASE_URL = 'https://spclient.wg.spotify.com/';
 // literal username, so `.../profile/me` is the public user named "me").
 const WEB_PLAYER_GRAPHQL_BASE_URL = 'https://api-partner.spotify.com/';
 const GRAPHQL_QUERY_URL = 'https://api-partner.spotify.com/pathfinder/v2/query';
+// The GraphQL API refuses ("Client/request not allowed", 403) requests whose
+// User-Agent is not a browser's, such as curl's default one; a client-token
+// header is not needed.
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:159.0) Gecko/20100101 Firefox/159.0';
 // The persisted query the web player runs to read the signed-in user's own
 // profile; the hash names the query text on Spotify's side.
 const PROFILE_ATTRIBUTES_QUERY = JSON.stringify({
@@ -64,6 +68,8 @@ const PROFILE_ATTRIBUTES_CURL_ARGUMENTS = [
     'Content-Type: application/json;charset=UTF-8',
     '-H',
     'app-platform: WebPlayer',
+    '-H',
+    `User-Agent: ${BROWSER_USER_AGENT}`,
     '--data-raw',
     PROFILE_ATTRIBUTES_QUERY,
 ];
@@ -301,7 +307,7 @@ export function createSpotify(sdk) {
         info = [
             `Spotify, through the web player's own APIs at ${WEB_PLAYER_API_BASE_URL} and ${WEB_PLAYER_GRAPHQL_BASE_URL} (undocumented).`,
             `GET ${WEB_PLAYER_API_BASE_URL}user-profile-view/v3/profile/<username> returns a user's public profile; "me" there is a literal username, not the signed-in user.`,
-            `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with header "app-platform: WebPlayer" and body ${PROFILE_ATTRIBUTES_QUERY}.`,
+            `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with headers "app-platform: WebPlayer" and a browser User-Agent (curl's default one gets a 403) and body ${PROFILE_ATTRIBUTES_QUERY}.`,
             "This relies on Spotify's first-party web client and may break when Spotify changes it.",
         ].join(' ');
         // A cheap read that only a valid token gets a 200 for.

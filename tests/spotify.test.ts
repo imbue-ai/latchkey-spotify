@@ -37,6 +37,8 @@ describe('the plugin manifest', () => {
     expect(checkArguments).toContain('https://api-partner.spotify.com/pathfinder/v2/query');
     expect(checkArguments).toContain('"operationName":"profileAttributes"');
     expect(checkArguments).not.toContain('/profile/me');
+    // Spotify refuses the GraphQL API to curl's default User-Agent.
+    expect(checkArguments).toMatch(/User-Agent: Mozilla\/5\.0 /);
   });
 
   it('registers the credentials class its service stores', () => {
