@@ -51,7 +51,35 @@ const SESSION_COOKIE_NAME = 'sp_dc';
 // All of the web player's data API (profile, playlists, library) lives on
 // this host; other spclient hosts serve playback state.
 const WEB_PLAYER_API_BASE_URL = 'https://spclient.wg.spotify.com/';
-const PROFILE_URL = 'https://spclient.wg.spotify.com/user-profile-view/v3/profile/me';
+// The web player's GraphQL API. The same token authorises it, and it is the
+// only place the signed-in user's own identity is available: spclient has no
+// "who am I" route (its `/user-profile-view/v3/profile/<username>` takes a
+// literal username, so `.../profile/me` is the public user named "me").
+const WEB_PLAYER_GRAPHQL_BASE_URL = 'https://api-partner.spotify.com/';
+const GRAPHQL_QUERY_URL = 'https://api-partner.spotify.com/pathfinder/v2/query';
+// The persisted query the web player runs to read the signed-in user's own
+// profile; the hash names the query text on Spotify's side.
+const PROFILE_ATTRIBUTES_QUERY = JSON.stringify({
+  variables: {},
+  operationName: 'profileAttributes',
+  extensions: {
+    persistedQuery: {
+      version: 1,
+      sha256Hash: '08ffb4730af3746e04a8301396f20875dbbce10c75243803091a9274eacc8ac0',
+    },
+  },
+});
+const PROFILE_ATTRIBUTES_CURL_ARGUMENTS = [
+  '-X',
+  'POST',
+  GRAPHQL_QUERY_URL,
+  '-H',
+  'Content-Type: application/json;charset=UTF-8',
+  '-H',
+  'app-platform: WebPlayer',
+  '--data-raw',
+  PROFILE_ATTRIBUTES_QUERY,
+] as const;
 
 // Paths on the web player host that a user may still be signed out on.
 const PRE_LOGIN_PATH_PATTERN = /^\/(login|signup|signin|auth|sso|oauth|verify|mfa|otp)/i;
@@ -108,6 +136,8 @@ export function createSpotify(sdk: LatchkeySdk) {
     LoginFailedError,
     NoCurlCredentialsNotSupportedError,
     Service,
+    fetchAccountFromEndpoint,
+    tryParseJson,
     z,
   } = sdk;
 
@@ -344,19 +374,33 @@ export function createSpotify(sdk: LatchkeySdk) {
   class Spotify extends Service {
     readonly name = 'spotify';
     readonly displayName = 'Spotify';
-    readonly baseApiUrls = [WEB_PLAYER_API_BASE_URL] as const;
+    readonly baseApiUrls = [WEB_PLAYER_API_BASE_URL, WEB_PLAYER_GRAPHQL_BASE_URL] as const;
     readonly loginUrl = LOGIN_URL;
     readonly info = [
-      `Spotify, through the web player's own API at ${WEB_PLAYER_API_BASE_URL} (undocumented).`,
-      `Known endpoint: GET ${PROFILE_URL} returns the signed-in user's profile.`,
+      `Spotify, through the web player's own APIs at ${WEB_PLAYER_API_BASE_URL} and ${WEB_PLAYER_GRAPHQL_BASE_URL} (undocumented).`,
+      `GET ${WEB_PLAYER_API_BASE_URL}user-profile-view/v3/profile/<username> returns a user's public profile; "me" there is a literal username, not the signed-in user.`,
+      `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with header "app-platform: WebPlayer" and body ${PROFILE_ATTRIBUTES_QUERY}.`,
       "This relies on Spotify's first-party web client and may break when Spotify changes it.",
     ].join(' ');
 
     // A cheap read that only a valid token gets a 200 for.
-    readonly credentialCheckCurlArguments = [PROFILE_URL] as const;
+    readonly credentialCheckCurlArguments = PROFILE_ATTRIBUTES_CURL_ARGUMENTS;
 
-    // No getAccount: the cookie names no account, so `--account` names it
-    // instead when a user has more than one.
+    // The cookie names no account, so the account is read from the web
+    // player's own profile query: the signed-in user's Spotify username.
+    override getAccount(apiCredentials: ApiCredentials): Promise<string | null> {
+      return fetchAccountFromEndpoint(
+        apiCredentials,
+        PROFILE_ATTRIBUTES_CURL_ARGUMENTS,
+        (responseBody) => {
+          const data = tryParseJson(responseBody) as {
+            data?: { me?: { profile?: { username?: unknown } } };
+          } | null;
+          const username = data?.data?.me?.profile?.username;
+          return typeof username === 'string' && username !== '' ? username : null;
+        }
+      );
+    }
 
     setCredentialsExample(serviceName: string): string {
       return `latchkey auth set-nocurl ${serviceName} <${SESSION_COOKIE_NAME} cookie value>`;

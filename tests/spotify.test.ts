@@ -26,7 +26,17 @@ describe('the plugin manifest', () => {
   it('provides the spotify service, built from the sdk', () => {
     expect(spotify).toBeInstanceOf(sdk.Service);
     expect(spotify!.name).toBe('spotify');
-    expect(spotify!.baseApiUrls).toEqual(['https://spclient.wg.spotify.com/']);
+    expect(spotify!.baseApiUrls).toEqual([
+      'https://spclient.wg.spotify.com/',
+      'https://api-partner.spotify.com/',
+    ]);
+  });
+
+  it('checks credentials against the signed-in user\'s own profile, not the user named "me"', () => {
+    const checkArguments = spotify!.credentialCheckCurlArguments.join(' ');
+    expect(checkArguments).toContain('https://api-partner.spotify.com/pathfinder/v2/query');
+    expect(checkArguments).toContain('"operationName":"profileAttributes"');
+    expect(checkArguments).not.toContain('/profile/me');
   });
 
   it('registers the credentials class its service stores', () => {
