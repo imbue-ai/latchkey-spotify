@@ -14,7 +14,11 @@
  *   player, and the plugin reads `sp_dc` from the browser and captures the
  *   token the player mints when it loads.
  * - Injection: `Authorization: Bearer <token>` on requests to the web player's
- *   API host, spclient.wg.spotify.com. (The public api.spotify.com rate-limits
+ *   API hosts: spclient.wg.spotify.com for data, and api-partner.spotify.com
+ *   (its GraphQL API) for the signed-in user's own identity. The latter
+ *   refuses requests without a browser User-Agent, so requests also go out
+ *   presenting as the web player: a browser User-Agent and
+ *   `app-platform: WebPlayer`. (The public api.spotify.com rate-limits
  *   web-player tokens.)
  * - Refresh: when a request finds the token expired, a headless browser loads
  *   the web player with `sp_dc` set and captures a fresh token. Nothing is
@@ -38,7 +42,39 @@ const SESSION_COOKIE_NAME = 'sp_dc';
 // All of the web player's data API (profile, playlists, library) lives on
 // this host; other spclient hosts serve playback state.
 const WEB_PLAYER_API_BASE_URL = 'https://spclient.wg.spotify.com/';
-const PROFILE_URL = 'https://spclient.wg.spotify.com/user-profile-view/v3/profile/me';
+// The web player's GraphQL API. The same token authorises it, and it is the
+// only place the signed-in user's own identity is available: spclient has no
+// "who am I" route (its `/user-profile-view/v3/profile/<username>` takes a
+// literal username, so `.../profile/me` is the public user named "me").
+const WEB_PLAYER_GRAPHQL_BASE_URL = 'https://api-partner.spotify.com/';
+const GRAPHQL_QUERY_URL = 'https://api-partner.spotify.com/pathfinder/v2/query';
+// The GraphQL API refuses ("Client/request not allowed", 403) requests whose
+// User-Agent is not a browser's, such as curl's default one; a client-token
+// header is not needed. The credentials inject this one, along with the
+// web player's app-platform header, into every request.
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:159.0) Gecko/20100101 Firefox/159.0';
+// The persisted query the web player runs to read the signed-in user's own
+// profile; the hash names the query text on Spotify's side.
+const PROFILE_ATTRIBUTES_QUERY = JSON.stringify({
+    variables: {},
+    operationName: 'profileAttributes',
+    extensions: {
+        persistedQuery: {
+            version: 1,
+            sha256Hash: '08ffb4730af3746e04a8301396f20875dbbce10c75243803091a9274eacc8ac0',
+        },
+    },
+});
+const APP_PLATFORM_HEADER = 'app-platform: WebPlayer';
+const PROFILE_ATTRIBUTES_CURL_ARGUMENTS = [
+    '-X',
+    'POST',
+    GRAPHQL_QUERY_URL,
+    '-H',
+    'Content-Type: application/json;charset=UTF-8',
+    '--data-raw',
+    PROFILE_ATTRIBUTES_QUERY,
+];
 // Paths on the web player host that a user may still be signed out on.
 const PRE_LOGIN_PATH_PATTERN = /^\/(login|signup|signin|auth|sso|oauth|verify|mfa|otp)/i;
 // The accounts site lands on a status page after a successful login when it
@@ -78,7 +114,7 @@ export function isLoggedInUrl(url) {
     return url.hostname === ACCOUNTS_HOST && ACCOUNTS_LOGGED_IN_PATH_PATTERN.test(url.pathname);
 }
 export function createSpotify(sdk) {
-    const { ApiCredentialsUsageError, BrowserFollowupServiceSession, FollowupWork, LoginFailedError, NoCurlCredentialsNotSupportedError, Service, z, } = sdk;
+    const { ApiCredentialsUsageError, BrowserFollowupServiceSession, FollowupWork, LoginFailedError, NoCurlCredentialsNotSupportedError, Service, fetchAccountFromEndpoint, tryParseJson, z, } = sdk;
     // What `latchkey auth set-nocurl` reports to the user when it is handed
     // something other than the session cookie.
     class SpotifyCredentialArgumentsError extends NoCurlCredentialsNotSupportedError {
@@ -116,7 +152,18 @@ export function createSpotify(sdk) {
                 throw new ApiCredentialsUsageError('Spotify credentials hold no access token yet. One is minted from the session ' +
                     'cookie when a request is made.');
             }
-            return Promise.resolve(['-H', `Authorization: Bearer ${this.accessToken}`, ...curlArguments]);
+            // The User-Agent goes in through `-A` rather than `-H` so that a
+            // caller's own `-A` or `-H 'User-Agent: ...'` replaces it instead of
+            // being sent alongside it.
+            return Promise.resolve([
+                '-H',
+                `Authorization: Bearer ${this.accessToken}`,
+                '-A',
+                BROWSER_USER_AGENT,
+                '-H',
+                APP_PLATFORM_HEADER,
+                ...curlArguments,
+            ]);
         }
         // Expired credentials are what Latchkey asks the service to refresh, so
         // credentials without a token count as expired too: minting one is the
@@ -268,17 +315,25 @@ export function createSpotify(sdk) {
     class Spotify extends Service {
         name = 'spotify';
         displayName = 'Spotify';
-        baseApiUrls = [WEB_PLAYER_API_BASE_URL];
+        baseApiUrls = [WEB_PLAYER_API_BASE_URL, WEB_PLAYER_GRAPHQL_BASE_URL];
         loginUrl = LOGIN_URL;
         info = [
-            `Spotify, through the web player's own API at ${WEB_PLAYER_API_BASE_URL} (undocumented).`,
-            `Known endpoint: GET ${PROFILE_URL} returns the signed-in user's profile.`,
+            `Spotify, through the web player's own APIs at ${WEB_PLAYER_API_BASE_URL} and ${WEB_PLAYER_GRAPHQL_BASE_URL} (undocumented).`,
+            `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with body ${PROFILE_ATTRIBUTES_QUERY}.`,
+            'A browser User-Agent and the "app-platform: WebPlayer" header, which that API requires, are added to every request automatically.',
             "This relies on Spotify's first-party web client and may break when Spotify changes it.",
         ].join(' ');
         // A cheap read that only a valid token gets a 200 for.
-        credentialCheckCurlArguments = [PROFILE_URL];
-        // No getAccount: the cookie names no account, so `--account` names it
-        // instead when a user has more than one.
+        credentialCheckCurlArguments = PROFILE_ATTRIBUTES_CURL_ARGUMENTS;
+        // The cookie names no account, so the account is read from the web
+        // player's own profile query: the signed-in user's Spotify username.
+        getAccount(apiCredentials) {
+            return fetchAccountFromEndpoint(apiCredentials, PROFILE_ATTRIBUTES_CURL_ARGUMENTS, (responseBody) => {
+                const data = tryParseJson(responseBody);
+                const username = data?.data?.me?.profile?.username;
+                return typeof username === 'string' && username !== '' ? username : null;
+            });
+        }
         setCredentialsExample(serviceName) {
             return `latchkey auth set-nocurl ${serviceName} <${SESSION_COOKIE_NAME} cookie value>`;
         }
