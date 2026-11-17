@@ -14,8 +14,10 @@
  *   player, and the plugin reads `sp_dc` from the browser and captures the
  *   token the player mints when it loads.
  * - Injection: `Authorization: Bearer <token>` on requests to the web player's
- *   API host, spclient.wg.spotify.com. (The public api.spotify.com rate-limits
- *   web-player tokens.)
+ *   API hosts: spclient.wg.spotify.com for data, and api-partner.spotify.com
+ *   (its GraphQL API) for the signed-in user's own identity, which refuses
+ *   requests without a browser User-Agent. (The public api.spotify.com
+ *   rate-limits web-player tokens.)
  * - Refresh: when a request finds the token expired, a headless browser loads
  *   the web player with `sp_dc` set and captures a fresh token. Nothing is
  *   minted while no requests are made.
