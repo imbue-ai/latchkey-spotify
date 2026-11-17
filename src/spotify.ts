@@ -15,9 +15,11 @@
  *   token the player mints when it loads.
  * - Injection: `Authorization: Bearer <token>` on requests to the web player's
  *   API hosts: spclient.wg.spotify.com for data, and api-partner.spotify.com
- *   (its GraphQL API) for the signed-in user's own identity, which refuses
- *   requests without a browser User-Agent. (The public api.spotify.com
- *   rate-limits web-player tokens.)
+ *   (its GraphQL API) for the signed-in user's own identity. The latter
+ *   refuses requests without a browser User-Agent, so requests also go out
+ *   presenting as the web player: a browser User-Agent and
+ *   `app-platform: WebPlayer`. (The public api.spotify.com rate-limits
+ *   web-player tokens.)
  * - Refresh: when a request finds the token expired, a headless browser loads
  *   the web player with `sp_dc` set and captures a fresh token. Nothing is
  *   minted while no requests are made.
@@ -61,7 +63,8 @@ const WEB_PLAYER_GRAPHQL_BASE_URL = 'https://api-partner.spotify.com/';
 const GRAPHQL_QUERY_URL = 'https://api-partner.spotify.com/pathfinder/v2/query';
 // The GraphQL API refuses ("Client/request not allowed", 403) requests whose
 // User-Agent is not a browser's, such as curl's default one; a client-token
-// header is not needed.
+// header is not needed. The credentials inject this one, along with the
+// web player's app-platform header, into every request.
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:159.0) Gecko/20100101 Firefox/159.0';
 // The persisted query the web player runs to read the signed-in user's own
@@ -76,16 +79,13 @@ const PROFILE_ATTRIBUTES_QUERY = JSON.stringify({
     },
   },
 });
+const APP_PLATFORM_HEADER = 'app-platform: WebPlayer';
 const PROFILE_ATTRIBUTES_CURL_ARGUMENTS = [
   '-X',
   'POST',
   GRAPHQL_QUERY_URL,
   '-H',
   'Content-Type: application/json;charset=UTF-8',
-  '-H',
-  'app-platform: WebPlayer',
-  '-H',
-  `User-Agent: ${BROWSER_USER_AGENT}`,
   '--data-raw',
   PROFILE_ATTRIBUTES_QUERY,
 ] as const;
@@ -193,7 +193,18 @@ export function createSpotify(sdk: LatchkeySdk) {
             'cookie when a request is made.'
         );
       }
-      return Promise.resolve(['-H', `Authorization: Bearer ${this.accessToken}`, ...curlArguments]);
+      // The User-Agent goes in through `-A` rather than `-H` so that a
+      // caller's own `-A` or `-H 'User-Agent: ...'` replaces it instead of
+      // being sent alongside it.
+      return Promise.resolve([
+        '-H',
+        `Authorization: Bearer ${this.accessToken}`,
+        '-A',
+        BROWSER_USER_AGENT,
+        '-H',
+        APP_PLATFORM_HEADER,
+        ...curlArguments,
+      ]);
     }
 
     // Expired credentials are what Latchkey asks the service to refresh, so
@@ -388,7 +399,8 @@ export function createSpotify(sdk: LatchkeySdk) {
     readonly info = [
       `Spotify, through the web player's own APIs at ${WEB_PLAYER_API_BASE_URL} and ${WEB_PLAYER_GRAPHQL_BASE_URL} (undocumented).`,
       `GET ${WEB_PLAYER_API_BASE_URL}user-profile-view/v3/profile/<username> returns a user's public profile; "me" there is a literal username, not the signed-in user.`,
-      `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with headers "app-platform: WebPlayer" and a browser User-Agent (curl's default one gets a 403) and body ${PROFILE_ATTRIBUTES_QUERY}.`,
+      `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with body ${PROFILE_ATTRIBUTES_QUERY}.`,
+      'A browser User-Agent and the "app-platform: WebPlayer" header, which that API requires, are added to every request automatically.',
       "This relies on Spotify's first-party web client and may break when Spotify changes it.",
     ].join(' ');
 

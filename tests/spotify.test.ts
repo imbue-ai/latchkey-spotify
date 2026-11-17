@@ -37,8 +37,6 @@ describe('the plugin manifest', () => {
     expect(checkArguments).toContain('https://api-partner.spotify.com/pathfinder/v2/query');
     expect(checkArguments).toContain('"operationName":"profileAttributes"');
     expect(checkArguments).not.toContain('/profile/me');
-    // Spotify refuses the GraphQL API to curl's default User-Agent.
-    expect(checkArguments).toMatch(/User-Agent: Mozilla\/5\.0 /);
   });
 
   it('registers the credentials class its service stores', () => {
@@ -59,12 +57,18 @@ describe('SpotifySessionCredentials', () => {
     ).toThrow();
   });
 
-  it('injects the access token as a bearer header', async () => {
+  it('injects the access token as a bearer header, presenting as the web player', async () => {
     const credentials = credentialsWithToken('t0ken');
 
+    // Spotify refuses the GraphQL API to curl's default User-Agent. The
+    // browser one goes in through -A so that a caller's own replaces it.
     expect(await credentials.injectIntoCurlCall(['https://spclient.wg.spotify.com/x'])).toEqual([
       '-H',
       'Authorization: Bearer t0ken',
+      '-A',
+      expect.stringMatching(/^Mozilla\/5\.0 /),
+      '-H',
+      'app-platform: WebPlayer',
       'https://spclient.wg.spotify.com/x',
     ]);
   });
