@@ -398,7 +398,6 @@ export function createSpotify(sdk: LatchkeySdk) {
     readonly loginUrl = LOGIN_URL;
     readonly info = [
       `Spotify, through the web player's own APIs at ${WEB_PLAYER_API_BASE_URL} and ${WEB_PLAYER_GRAPHQL_BASE_URL} (undocumented).`,
-      `GET ${WEB_PLAYER_API_BASE_URL}user-profile-view/v3/profile/<username> returns a user's public profile; "me" there is a literal username, not the signed-in user.`,
       `The signed-in user's own profile (username at data.me.profile.username) comes from POST ${GRAPHQL_QUERY_URL} with body ${PROFILE_ATTRIBUTES_QUERY}.`,
       'A browser User-Agent and the "app-platform: WebPlayer" header, which that API requires, are added to every request automatically.',
       "This relies on Spotify's first-party web client and may break when Spotify changes it.",
